@@ -280,14 +280,10 @@ Now analyze these slides:`
       parts.push({ text: `Additional User Context: ${additionalContext}` });
     }
 
-    let currentProgress = 0;
 
-    // Smooth "Thinking" Simulation (0% -> 35% while waiting for first chunk)
-    // Runs every 200ms
-    const interval = setInterval(() => {
-      currentProgress += (35 - currentProgress) * 0.1;
-      if (onProgress) onProgress(Math.floor(currentProgress));
-    }, 200);
+
+    // Removed artificial "Thinking" simulation
+    if (onProgress) onProgress(10);
 
     const result = await generateWithRetry(() => ai.models.generateContentStream({
       model: 'gemini-2.5-flash', // Updated to 2.5 Flash as confirmed by user access
@@ -304,22 +300,20 @@ Now analyze these slides:`
     let chunkCount = 0;
 
     for await (const chunk of result) {
-      if (chunkCount === 0) clearInterval(interval); // Stop thinking, start streaming
-
+      // Chunk received
       const chunkText = chunk.text || "";
       fullText += chunkText;
       chunkCount++;
 
       if (onProgress) {
-        // Smooth Streaming Simulation (Current -> 95%)
-        // We don't know total tokens, so we asymptotically approach 95% from wherever we are.
-        // Each chunk moves us 15% of the remaining distance.
-        currentProgress += (95 - currentProgress) * 0.15;
-        onProgress(Math.floor(currentProgress));
+        // Real progress estimation based on chunk count (approximate)
+        // Cap at 90% until parsing is done
+        const estimated = Math.min(90, 10 + (chunkCount * 5));
+        onProgress(estimated);
       }
     }
 
-    clearInterval(interval); // Safety clear
+    // clearInterval not needed anymore
 
     if (!fullText) throw new Error("No response text generated");
 
