@@ -296,8 +296,15 @@ Now analyze these slides:`
 
 
 
-    // Removed artificial "Thinking" simulation
-    if (onProgress) onProgress(10);
+    // Keepalive animation: 10% → 35% during "Thinking" phase (before first chunk)
+    let thinkingProgress = 10;
+    if (onProgress) onProgress(thinkingProgress);
+    const keepalive = setInterval(() => {
+      if (onProgress && thinkingProgress < 35) {
+        thinkingProgress += 2;
+        onProgress(thinkingProgress);
+      }
+    }, 200);
 
     const streamPromise = generateWithRetry(() => ai.models.generateContentStream({
       model: 'gemini-2.5-flash',
@@ -314,21 +321,35 @@ Now analyze these slides:`
 
     let fullText = '';
     let chunkCount = 0;
-    let lastUpdate = 0;
+    let lastUpdate = Date.now();
+    let lastChunkTime = Date.now();
 
-    for await (const chunk of result) {
-      const chunkText = chunk.text || "";
-      fullText += chunkText;
-      chunkCount++;
+    // Process chunks with inactivity timeout
+    try {
+      for await (const chunk of result) {
+        if (chunkCount === 0) clearInterval(keepalive); // First chunk arrived, stop keepalive
 
-      // Throttled UI Updates (Max once every 100ms for smooth feel)
-      const now = Date.now();
-      if (onProgress && (now - lastUpdate > 100)) {
-        // Faster progress: 10 per chunk, cap at 90
-        const estimated = Math.min(90, 10 + (chunkCount * 10));
-        onProgress(estimated);
-        lastUpdate = now;
+        const chunkText = chunk.text || "";
+        fullText += chunkText;
+        chunkCount++;
+        lastChunkTime = Date.now();
+
+        // Throttled UI Updates (100ms)
+        const now = Date.now();
+        if (onProgress && (now - lastUpdate > 100)) {
+          // Progress: 35% → 90% as chunks arrive
+          const estimated = Math.min(90, 35 + (chunkCount * 7));
+          onProgress(estimated);
+          lastUpdate = now;
+        }
+
+        // Inactivity check (15s without a chunk = stalled)
+        if (Date.now() - lastChunkTime > 15000) {
+          throw new Error("Stream stalled: no data received for 15 seconds");
+        }
       }
+    } finally {
+      clearInterval(keepalive); // Cleanup
     }
 
     // clearInterval not needed anymore
