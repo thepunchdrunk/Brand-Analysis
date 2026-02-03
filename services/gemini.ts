@@ -34,13 +34,27 @@ const generateWithRetry = async <T>(fn: () => Promise<T>, retries = 3, delay = 1
   try {
     return await fn();
   } catch (error: any) {
-    if (retries > 0 && (error?.status === 503 || error?.code === 503 || error?.message?.includes('overloaded'))) {
-      console.warn(`API Overloaded. Retrying in ${delay / 1000}s...`);
+    // Fail fast on Auth (401, 403) or Bad Request (400)
+    if (error?.status === 400 || error?.status === 401 || error?.status === 403) {
+      throw error;
+    }
+
+    // Retry on Overloaded (503) or Rate Limit (429)
+    if (retries > 0 && (error?.status === 503 || error?.status === 429 || error?.code === 503 || error?.message?.includes('overloaded'))) {
+      console.warn(`API Transient Error (${error?.status}). Retrying in ${delay / 1000}s...`);
       await new Promise(r => setTimeout(r, delay));
       return generateWithRetry(fn, retries - 1, delay * 2);
     }
     throw error;
   }
+};
+
+// Timeout Wrapper
+const withTimeout = <T>(promise: Promise<T>, ms: number = 45000): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Request timed out after ${ms / 1000}s`)), ms))
+  ]);
 };
 
 // Define the schema for the analysis response
@@ -285,31 +299,34 @@ Now analyze these slides:`
     // Removed artificial "Thinking" simulation
     if (onProgress) onProgress(10);
 
-    const result = await generateWithRetry(() => ai.models.generateContentStream({
-      model: 'gemini-2.5-flash', // Updated to 2.5 Flash as confirmed by user access
+    const streamPromise = generateWithRetry(() => ai.models.generateContentStream({
+      model: 'gemini-2.5-flash',
       contents: { parts },
       config: {
         systemInstruction: systemInstruction,
         responseMimeType: "application/json",
         responseSchema: analysisSchema,
-        temperature: 0.2, // Lower temperature for precision
+        temperature: 0.2,
       },
     }));
 
+    const result = await withTimeout(streamPromise, 45000); // 45s Hard Timeout
+
     let fullText = '';
     let chunkCount = 0;
+    let lastUpdate = 0;
 
     for await (const chunk of result) {
-      // Chunk received
       const chunkText = chunk.text || "";
       fullText += chunkText;
       chunkCount++;
 
-      if (onProgress) {
-        // Real progress estimation based on chunk count (approximate)
-        // Cap at 90% until parsing is done
+      // Throttled UI Updates (Max once every 500ms)
+      const now = Date.now();
+      if (onProgress && (now - lastUpdate > 500)) {
         const estimated = Math.min(90, 10 + (chunkCount * 5));
         onProgress(estimated);
+        lastUpdate = now;
       }
     }
 
