@@ -290,7 +290,7 @@ Now analyze these slides:`
     }, 200);
 
     const result = await generateWithRetry(() => ai.models.generateContentStream({
-      model: 'gemini-1.5-flash-001', // Pinned version for stability
+      model: 'gemini-2.0-flash', // Updated to 2.0 Flash
       contents: { parts },
       config: {
         systemInstruction: systemInstruction,
@@ -369,7 +369,7 @@ export const translateContent = async (content: string, targetLanguage: string, 
       Text: "${content.substring(0, 5000)}"
     `;
   const response = await ai.models.generateContent({
-    model: 'gemini-1.5-flash-001',
+    model: 'gemini-2.0-flash',
     contents: prompt,
     config: { responseMimeType: "application/json", responseSchema: translationSchema }
   });
@@ -381,7 +381,7 @@ export const detectContext = async (content: string): Promise<{ context: Communi
   const ai = getClient();
   // We only allow text-based inference.
   const response = await ai.models.generateContent({
-    model: 'gemini-1.5-flash-001',
+    model: 'gemini-2.0-flash',
     contents: `Analyze text to determine 'Context' and 'AssetType'. 
     Contexts: 
     - Sales
@@ -438,7 +438,7 @@ export const detectVisualContext = async (fileBase64: string, mimeType: string):
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash-001',
+      model: 'gemini-2.0-flash',
       contents: { parts },
       config: { responseMimeType: "application/json", responseSchema: typeSchema }
     });
@@ -457,7 +457,7 @@ export const detectVisualContext = async (fileBase64: string, mimeType: string):
 export const extractBrandSettings = async (content: string): Promise<BrandSettings> => {
   const ai = getClient();
   const response = await ai.models.generateContent({
-    model: 'gemini-1.5-flash-001',
+    model: 'gemini-2.0-flash',
     contents: `Extract brand settings from: ${content.substring(0, 5000)}`,
     config: { responseMimeType: "application/json", responseSchema: settingsExtractionSchema }
   });
