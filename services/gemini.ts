@@ -296,15 +296,23 @@ Now analyze these slides:`
 
 
 
-    // Keepalive animation: 10% → 35% during "Thinking" phase (before first chunk)
-    let thinkingProgress = 10;
-    if (onProgress) onProgress(thinkingProgress);
-    const keepalive = setInterval(() => {
-      if (onProgress && thinkingProgress < 35) {
-        thinkingProgress += 2;
-        onProgress(thinkingProgress);
+    // === SMOOTH TIME-BASED PROGRESS ===
+    // Progress fills 10% → 90% over ~30 seconds regardless of chunk timing
+    // This prevents the "stuck" or "jumpy" feeling from burst-based streaming
+    const startTime = Date.now();
+    let currentProgress = 10;
+    if (onProgress) onProgress(currentProgress);
+
+    const progressInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      // Asymptotic curve: rises quickly at first, slows towards 90%
+      // Formula: 10 + 80 * (1 - e^(-elapsed/15000)) → approaches 90% over ~30s
+      const targetProgress = Math.min(88, 10 + 78 * (1 - Math.exp(-elapsed / 12000)));
+      if (onProgress && targetProgress > currentProgress) {
+        currentProgress = Math.floor(targetProgress);
+        onProgress(currentProgress);
       }
-    }, 200);
+    }, 100); // 10 FPS updates
 
     const streamPromise = generateWithRetry(() => ai.models.generateContentStream({
       model: 'gemini-2.5-flash',
@@ -317,31 +325,23 @@ Now analyze these slides:`
       },
     }));
 
-    const result = await withTimeout(streamPromise, 45000); // 45s Hard Timeout
+    let result;
+    try {
+      result = await withTimeout(streamPromise, 45000); // 45s Hard Timeout
+    } catch (e) {
+      clearInterval(progressInterval);
+      throw e;
+    }
 
     let fullText = '';
-    let chunkCount = 0;
-    let lastUpdate = Date.now();
     let lastChunkTime = Date.now();
 
-    // Process chunks with inactivity timeout
+    // Process chunks (progress animation continues in background)
     try {
       for await (const chunk of result) {
-        if (chunkCount === 0) clearInterval(keepalive); // First chunk arrived, stop keepalive
-
         const chunkText = chunk.text || "";
         fullText += chunkText;
-        chunkCount++;
         lastChunkTime = Date.now();
-
-        // Throttled UI Updates (100ms)
-        const now = Date.now();
-        if (onProgress && (now - lastUpdate > 100)) {
-          // Progress: 35% → 90% as chunks arrive
-          const estimated = Math.min(90, 35 + (chunkCount * 7));
-          onProgress(estimated);
-          lastUpdate = now;
-        }
 
         // Inactivity check (15s without a chunk = stalled)
         if (Date.now() - lastChunkTime > 15000) {
@@ -349,7 +349,7 @@ Now analyze these slides:`
         }
       }
     } finally {
-      clearInterval(keepalive); // Cleanup
+      clearInterval(progressInterval); // Stop animation
     }
 
     // clearInterval not needed anymore
