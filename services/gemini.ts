@@ -321,10 +321,11 @@ Now analyze these slides:`
       fullText += chunkText;
       chunkCount++;
 
-      // Throttled UI Updates (Max once every 500ms)
+      // Throttled UI Updates (Max once every 100ms for smooth feel)
       const now = Date.now();
-      if (onProgress && (now - lastUpdate > 500)) {
-        const estimated = Math.min(90, 10 + (chunkCount * 5));
+      if (onProgress && (now - lastUpdate > 100)) {
+        // Faster progress: 10 per chunk, cap at 90
+        const estimated = Math.min(90, 10 + (chunkCount * 10));
         onProgress(estimated);
         lastUpdate = now;
       }
