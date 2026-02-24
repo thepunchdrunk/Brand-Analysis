@@ -182,69 +182,30 @@ export const analyzeContent = async (
     `SAFETY MODE ACTIVE: This asset has ambiguous context. Assume maximum external visibility. Apply strictest interpretation of all rules. Treat all claims as requiring verification.` :
     "";
 
-  const systemInstruction = `
-    You are "BrandAlign Core Engine", an enterprise-grade Governance AI.
-    Your goal is to analyze assets with "Ultra-Deep" precision against the provided Brand Guidelines.
-    
-    === ANALYSIS CONFIGURATION ===
-    - **Focus Area**: ${focusArea}
-    - **Weighting**: Compliance(${complianceWeight}) | Cultural(${culturalWeight}) | Brand(${brandWeight})
-    - **Region**: ${region}
-    - **Context**: ${context}
-    - **Fix Intensity**: ${fixIntensity}
-    ${safetyPrompt}
+  const systemInstruction = `You are "BrandAlign Core Engine", a Governance AI that analyzes content against Brand Guidelines.
 
-    === BRAND STANDARDS (Strict Enforcement) ===
-    1. **Mission**: "${settings.mission}"
-    2. **Voice**: "${settings.toneVoice}"
-    3. **Banned Terms**: "${settings.bannedTerms}" (Automatic FAIL if found).
-    4. **Inclusive Language**: ${settings.inclusiveLanguage ? "REQUIRED" : "Optional"}
+=== CONFIG ===
+Focus: ${focusArea} | Weights: Compliance(${complianceWeight}), Cultural(${culturalWeight}), Brand(${brandWeight})
+Region: ${region} | Context: ${context} | Fix: ${fixIntensity}
+${safetyPrompt}
 
-    === DEEP ANALYSIS PILLARS ===
-    
-    1. **BRAND & VISUAL (Weight: ${brandWeight})**
-       - **Visual**: Assess layout, white space, hierarchy, and complexity. (Categorize as 'Brand')
-       - **Voice**: Check tone consistency.
-       - **Format**: Is the structure appropriate?
+=== BRAND STANDARDS ===
+Mission: "${settings.mission}" | Voice: "${settings.toneVoice}"
+Banned Terms: "${settings.bannedTerms}" (Auto FAIL if found)
+Inclusive Language: ${settings.inclusiveLanguage ? "REQUIRED" : "Optional"}
 
-    2. **CULTURAL & TONE (Weight: ${culturalWeight})**
-       - **Tone Drift**: Calculate specific % deviation from the Brand Voice.
-       - **Regional Fit**: If Region is not Global, strictly evaluate against local norms.
-       - **Symbolism**: Check for colors/phrases that might be offensive in ${region}.
+=== SCORING ===
+brandScore (0-100): Start at 100. Deduct 15-20 for High/blocking, 5-10 for Medium, 1-2 for Low. Average content ~75.
 
-    3. **COMPLIANCE & GOVERNANCE (Weight: ${complianceWeight})**
-       - **Risk Assessment**:
-         - CRITICAL: Banned terms, legal liabilities, unverified claims.
-         - MEDIUM: Brand inconsistency, minor tone drift.
-         - LOW: Formatting nitpicks.
-       - **Claims**: Identify every factual claim.
+=== ISSUE RULES ===
+- Categories: ONLY 'Brand', 'Compliance', 'Cultural'
+- Visual content: provide 'box_2d' as [ymin, xmin, ymax, xmax] (0-1000 scale)
+- Multi-page docs: provide 'page_number' (1-indexed)
+- Video/Audio: provide 'timestamp' in seconds (MANDATORY)
+- Provide concise, actionable 'fix' for each issue
+- correctedText: Brief rewrite of key problematic phrases only (not entire content)
 
-    === RESPONSE REQUIREMENTS ===
-    - **Scores**: 
-      - Calculate 'brandScore' (0-100). Start at 100.
-      - Deduct 15-20 points for Critical/Blocking issues.
-      - Deduct 5-10 points for Medium issues.
-      - Deduct 1-2 points for Low issues.
-      - Be strict. Average content should be ~75.
-    - **Issues**: Provide specific actionable advice.
-    - **Visual Annotation**: For ALL visual content (Images, Videos, PDFs, Presentations):
-      - You MUST provide precise bounding box coordinates in 'box_2d' field.
-      - Format: [ymin, xmin, ymax, xmax] 
-      - Scale: 0 to 1000. (e.g. [100, 100, 500, 500] is the center area)
-      - Be extremely pixel-accurate. Point to exact location of the issue.
-      - IMPORTANT: Every issue in visual content MUST have a valid box_2d array.
-    - **Page/Slide Numbers**: For multi-page documents (PDF, PPTX):
-      - You MUST provide 'page_number' (1-indexed) for EVERY issue.
-      - Match issues to the specific slide/page image provided.
-    - **Timestamps**: For Video/Audio content, you MUST provide 'timestamp' (in seconds) for EVERY issue.
-      - Timestamps are MANDATORY for all video/audio issues. Issues without timestamps will be INVALID.
-      - Provide the exact second where the issue is most visible or audible.
-      - Also provide 'box_2d' coordinates for the visual location at that specific timestamp.
-    - **Categories**: Use ONLY: 'Brand', 'Compliance', 'Cultural'. (Map visual/layout issues to 'Brand').
-    - **Corrected Text**: Rewrite content to match Brand Voice.
-
-    Return valid JSON matching the schema.
-  `;
+Return valid JSON matching the schema.`;
 
   try {
     const parts: any[] = [];
@@ -252,21 +213,11 @@ export const analyzeContent = async (
     // When we have visualSlides (PDF pages or PPTX slides), prioritize visual analysis
     if (visualSlides && visualSlides.length > 0) {
       parts.push({
-        text: `VISUAL ANALYSIS MODE: You are analyzing ${visualSlides.length} slide/page images extracted from a presentation/document.
-        
-CRITICAL REQUIREMENTS:
-1. Analyze EACH slide image visually for layout, design, text positioning, and brand alignment issues.
-2. For EVERY issue you find, you MUST provide:
-   - 'box_2d': [ymin, xmin, ymax, xmax] coordinates on a 0-1000 scale pointing to the EXACT visual location of the issue
-   - 'page_number': Which slide/page (1-indexed) the issue appears on
-3. Issues WITHOUT box_2d coordinates will be INVALID and ignored.
-4. Be precise about visual locations - point to SPECIFIC elements on the slide.
-
-Now analyze these slides:`
+        text: `VISUAL ANALYSIS MODE: Analyzing ${visualSlides.length} slide/page images. For EVERY issue provide 'box_2d' [ymin,xmin,ymax,xmax] (0-1000) and 'page_number' (1-indexed). Analyze these slides:`
       });
 
       visualSlides.forEach((slide, index) => {
-        parts.push({ text: `=== SLIDE ${index + 1} IMAGE ===` });
+        parts.push({ text: `=== SLIDE ${index + 1} ===` });
         parts.push({
           inlineData: {
             mimeType: slide.mimeType,
@@ -275,29 +226,13 @@ Now analyze these slides:`
         });
       });
 
-      // Add text content as supplementary context only
       if (content) {
-        parts.push({ text: `\n\nSUPPLEMENTARY TEXT CONTENT (for context):\n${content}` });
+        parts.push({ text: `\n\nSUPPLEMENTARY TEXT:\n${content}` });
       }
     } else if (fileBase64 && mimeType && (mimeType.startsWith('video/') || mimeType.startsWith('audio/'))) {
       // === VIDEO/AUDIO ANALYSIS MODE ===
       parts.push({
-        text: `VIDEO/AUDIO ANALYSIS MODE: You are analyzing a ${assetType} file.
-
-CRITICAL REQUIREMENTS FOR VIDEO/AUDIO ANALYSIS:
-1. Watch/listen through the ENTIRE content carefully.
-2. For EVERY issue you find, you MUST provide:
-   - 'timestamp': The EXACT second (as a number) where the issue occurs. This is MANDATORY.
-   - 'box_2d': [ymin, xmin, ymax, xmax] coordinates (0-1000 scale) pointing to the visual location of the issue at that timestamp.
-3. Issues WITHOUT a 'timestamp' field will be REJECTED and are invalid.
-4. Analyze at multiple points throughout the video - check the beginning, middle, and end.
-5. Look for: brand voice consistency in narration/dialogue, visual brand alignment, on-screen text compliance, banned terms in speech/captions, cultural sensitivity in visuals.
-6. Space your timestamps across the full duration of the content.
-7. For audio-only content, set box_2d to [400, 400, 600, 600] (center) and focus on spoken content analysis.
-
-IMPORTANT: Every single issue in your response MUST have a numeric 'timestamp' value.
-
-Now analyze this ${assetType}:`
+        text: `VIDEO/AUDIO MODE: Analyzing a ${assetType}. For EVERY issue provide 'timestamp' (seconds, MANDATORY) and 'box_2d' [ymin,xmin,ymax,xmax] (0-1000). Check beginning, middle, end. For audio-only, use box_2d [400,400,600,600]. Analyze:`
       });
 
       parts.push({
@@ -308,11 +243,11 @@ Now analyze this ${assetType}:`
       });
 
       if (content) {
-        parts.push({ text: `\n\nSUPPLEMENTARY TEXT/TRANSCRIPT (if available):\n${content}` });
+        parts.push({ text: `\n\nTRANSCRIPT:\n${content}` });
       }
     } else {
       // Standard text/file analysis
-      parts.push({ text: content ? content : `Analyze this ${assetType} file visually.` });
+      parts.push({ text: content ? content : `Analyze this ${assetType} file.` });
 
       if (fileBase64 && mimeType) {
         parts.push({
@@ -325,77 +260,55 @@ Now analyze this ${assetType}:`
     }
 
     if (additionalContext) {
-      parts.push({ text: `Additional User Context: ${additionalContext}` });
+      parts.push({ text: `Context: ${additionalContext}` });
     }
 
-
-
-    // === SMOOTH TIME-BASED PROGRESS ===
-    // Progress fills 10% → 90% over ~30 seconds
-    // This prevents the "stuck" or "jumpy" feeling from burst-based streaming
+    // === PROGRESS ANIMATION ===
     const startTime = Date.now();
     let currentProgress = 10;
     if (onProgress) onProgress(currentProgress);
 
     const progressInterval = setInterval(() => {
       const elapsed = Date.now() - startTime;
-      // Asymptotic curve: rises quickly at first, slows towards 90%
-      // Formula: 10 + 78 * (1 - e^(-elapsed/12000)) → approaches 88% over ~30s
-      const targetProgress = Math.min(88, 10 + 78 * (1 - Math.exp(-elapsed / 12000)));
+      // Asymptotic curve: 10→88% over ~20s (fast model)
+      const targetProgress = Math.min(88, 10 + 78 * (1 - Math.exp(-elapsed / 8000)));
       if (onProgress && targetProgress > currentProgress) {
         currentProgress = Math.floor(targetProgress);
         onProgress(currentProgress);
       }
-    }, 100); // 10 FPS updates
+    }, 100);
 
-    const streamPromise = generateWithRetry(() => ai.models.generateContentStream({
-      model: 'gemini-2.5-flash',
-      contents: { parts },
-      config: {
-        systemInstruction: systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: analysisSchema,
-        temperature: 0.2,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    }));
-
-    let result;
+    // === SINGLE-CALL (non-streaming) — fastest for structured JSON ===
+    let response;
     try {
-      result = await withTimeout(streamPromise, 60000); // 60s timeout — fast with thinking disabled
+      response = await withTimeout(
+        generateWithRetry(() => ai.models.generateContent({
+          model: 'gemini-2.0-flash',
+          contents: { parts },
+          config: {
+            systemInstruction: systemInstruction,
+            responseMimeType: "application/json",
+            responseSchema: analysisSchema,
+            temperature: 0.2,
+          },
+        })),
+        60000
+      );
     } catch (e) {
       clearInterval(progressInterval);
       throw e;
     }
 
-    let fullText = '';
-    let lastChunkTime = Date.now();
+    clearInterval(progressInterval);
 
-    // Process chunks (progress animation continues in background)
-    try {
-      for await (const chunk of result) {
-        const chunkText = chunk.text || "";
-        fullText += chunkText;
-        lastChunkTime = Date.now();
-
-        // Inactivity check (15s without a chunk = stalled)
-        if (Date.now() - lastChunkTime > 15000) {
-          throw new Error("Stream stalled: no data received for 15 seconds");
-        }
-      }
-    } finally {
-      clearInterval(progressInterval); // Stop animation
-    }
-
-    // clearInterval not needed anymore
-
+    const fullText = response.text || "";
     if (!fullText) throw new Error("No response text generated");
 
-    if (onProgress) onProgress(98); // Parsing
+    if (onProgress) onProgress(95);
 
     const rawJson = JSON.parse(cleanJson(fullText));
 
-    // Validating & Transforming 0-1000 scale back to % for UI
+    // Transform 0-1000 scale bounding boxes to % for UI
     const issues = (rawJson.issues || []).map((issue: any) => {
       if (issue.box_2d && Array.isArray(issue.box_2d) && issue.box_2d.length === 4) {
         const [ymin, xmin, ymax, xmax] = issue.box_2d;
@@ -506,7 +419,7 @@ export const detectVisualContext = async (fileBase64: string, mimeType: string):
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash',
       contents: { parts },
       config: { responseMimeType: "application/json", responseSchema: typeSchema }
     });
@@ -525,7 +438,7 @@ export const detectVisualContext = async (fileBase64: string, mimeType: string):
 export const extractBrandSettings = async (content: string): Promise<BrandSettings> => {
   const ai = getClient();
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     contents: `Extract brand settings from: ${content.substring(0, 5000)}`,
     config: { responseMimeType: "application/json", responseSchema: settingsExtractionSchema }
   });
