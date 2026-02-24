@@ -213,7 +213,17 @@ Return valid JSON matching the schema.`;
     // When we have visualSlides (PDF pages or PPTX slides), prioritize visual analysis
     if (visualSlides && visualSlides.length > 0) {
       parts.push({
-        text: `VISUAL ANALYSIS MODE: Analyzing ${visualSlides.length} slide/page images. For EVERY issue provide 'box_2d' [ymin,xmin,ymax,xmax] (0-1000) and 'page_number' (1-indexed). Analyze these slides:`
+        text: `VISUAL ANALYSIS MODE: You are analyzing ${visualSlides.length} slide/page images extracted from a presentation/document.
+
+CRITICAL REQUIREMENTS:
+1. Analyze EACH slide image visually for layout, design, text positioning, and brand alignment issues.
+2. For EVERY issue you find, you MUST provide:
+   - 'box_2d': [ymin, xmin, ymax, xmax] coordinates on a 0-1000 scale pointing to the EXACT visual location of the issue
+   - 'page_number': Which slide/page (1-indexed) the issue appears on
+3. Issues WITHOUT box_2d coordinates or page_number will be INVALID and ignored.
+4. Be precise about visual locations - point to SPECIFIC elements on the slide.
+
+Now analyze these slides:`
       });
 
       visualSlides.forEach((slide, index) => {
