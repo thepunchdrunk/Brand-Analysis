@@ -74,9 +74,44 @@ const blobToDataURL = (blob: Blob): Promise<string> => {
 };
 
 
-// Render slide text directly to canvas — no iframe, no security issues
-// Strips HTML tags and draws text lines onto a 960x540 slide thumbnail
-const renderSlideHtmlToCanvas = (slideHtml: string, slideNumber: number): { data: string; mimeType: string } | null => {
+// Convert any image blob to a canvas-rendered PNG base64 (handles EMF, WMF, GIF, BMP, TIFF, etc.)
+const imageBlobToBase64PNG = (blob: Blob): Promise<{ data: string; mimeType: string } | null> => {
+    return new Promise((resolve) => {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.naturalWidth || img.width || 960;
+                canvas.height = img.naturalHeight || img.height || 540;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) { URL.revokeObjectURL(url); resolve(null); return; }
+                ctx.drawImage(img, 0, 0);
+                const base64 = canvas.toDataURL('image/png').split(',')[1];
+                URL.revokeObjectURL(url);
+                resolve({ data: base64, mimeType: 'image/png' });
+            } catch (e) {
+                console.warn('imageBlobToBase64PNG canvas render failed:', e);
+                URL.revokeObjectURL(url);
+                resolve(null);
+            }
+        };
+        img.onerror = () => {
+            console.warn('imageBlobToBase64PNG: image load failed for blob');
+            URL.revokeObjectURL(url);
+            resolve(null);
+        };
+        img.src = url;
+    });
+};
+
+// Render slide content to a canvas thumbnail (960x540).
+// Draws text AND any extracted per-slide images.
+const renderSlideToCanvas = async (
+    slideText: string,
+    slideNumber: number,
+    slideImageBlobs: Blob[]
+): Promise<{ data: string; mimeType: string } | null> => {
     try {
         const canvas = document.createElement('canvas');
         canvas.width = 960;
@@ -95,51 +130,63 @@ const renderSlideHtmlToCanvas = (slideHtml: string, slideNumber: number): { data
         ctx.font = 'bold 13px Arial';
         ctx.fillText(`SLIDE ${slideNumber}`, 24, 26);
 
-        // Thin separator line
+        // Thin separator
         ctx.fillStyle = '#e2e8f0';
         ctx.fillRect(0, 40, 960, 1);
 
-        // Strip HTML tags to get raw text
-        const rawText = slideHtml
-            .replace(/<h4[^>]*>.*?<\/h4>/gi, '')       // Remove slide number header
-            .replace(/<[^>]+>/g, ' ')                    // Remove all other tags
-            .replace(/&nbsp;/g, ' ')
-            .replace(/&amp;/g, '&')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/\s+/g, ' ')
-            .trim();
+        let contentY = 50;
 
-        // Word-wrap and draw text
-        const lines: string[] = [];
-        const words = rawText.split(' ');
-        let currentLine = '';
-        const maxWidth = 900;
-        ctx.font = '16px Arial';
-
-        for (const word of words) {
-            const testLine = currentLine ? `${currentLine} ${word}` : word;
-            if (ctx.measureText(testLine).width > maxWidth && currentLine) {
-                lines.push(currentLine);
-                currentLine = word;
-            } else {
-                currentLine = testLine;
-            }
+        // Draw extracted images onto the canvas (scaled to fit)
+        for (const blob of slideImageBlobs) {
+            try {
+                const bitmap = await createImageBitmap(blob).catch(() => null);
+                if (bitmap) {
+                    const maxW = 900;
+                    const maxH = 300;
+                    const scale = Math.min(maxW / bitmap.width, maxH / bitmap.height, 1);
+                    const drawW = bitmap.width * scale;
+                    const drawH = bitmap.height * scale;
+                    const drawX = (960 - drawW) / 2;
+                    ctx.drawImage(bitmap, drawX, contentY, drawW, drawH);
+                    contentY += drawH + 10;
+                    bitmap.close();
+                }
+            } catch { /* skip unrenderable images */ }
         }
-        if (currentLine) lines.push(currentLine);
 
-        ctx.fillStyle = '#1e293b';
-        let y = 76;
-        for (const line of lines.slice(0, 18)) {
-            if (y > 520) break;
-            ctx.fillText(line, 30, y);
-            y += 26;
+        // Draw text below images
+        const rawText = slideText.trim();
+        if (rawText) {
+            const lines: string[] = [];
+            const words = rawText.split(' ');
+            let currentLine = '';
+            const maxWidth = 900;
+            ctx.font = '16px Arial';
+
+            for (const word of words) {
+                const testLine = currentLine ? `${currentLine} ${word}` : word;
+                if (ctx.measureText(testLine).width > maxWidth && currentLine) {
+                    lines.push(currentLine);
+                    currentLine = word;
+                } else {
+                    currentLine = testLine;
+                }
+            }
+            if (currentLine) lines.push(currentLine);
+
+            ctx.fillStyle = '#1e293b';
+            let y = Math.max(contentY + 16, 76);
+            for (const line of lines.slice(0, 18)) {
+                if (y > 520) break;
+                ctx.fillText(line, 30, y);
+                y += 26;
+            }
         }
 
         const base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
         return { data: base64, mimeType: 'image/jpeg' };
     } catch (e) {
-        console.warn('renderSlideHtmlToCanvas failed:', e);
+        console.warn('renderSlideToCanvas failed:', e);
         return null;
     }
 };
@@ -150,8 +197,9 @@ export const extractPPTX = async (arrayBuffer: ArrayBuffer): Promise<{ text: str
     const result = { text: '', html: '<div class="pptx-preview space-y-8">' };
     let totalImageSize = 0;
     const visualSlides: { data: string; mimeType: string }[] = [];
-    const slideHtmlBlocks: string[] = []; // Store per-slide HTML for fallback canvas rendering
-    let slideFiles: string[] = []; // Hoisted for fallback access
+    // Per-slide data for canvas rendering
+    const slideDataList: { text: string; imageBlobs: Blob[] }[] = [];
+    let slideFiles: string[] = [];
 
     try {
         const content = await zip.loadAsync(arrayBuffer);
@@ -186,6 +234,7 @@ export const extractPPTX = async (arrayBuffer: ArrayBuffer): Promise<{ text: str
 
             // --- IMAGE EXTRACTION ---
             let imagesHtml = '';
+            const slideImageBlobs: Blob[] = []; // Collect blobs per-slide for canvas rendering
             try {
                 // Construct path to relationships file: ppt/slides/_rels/slideX.xml.rels
                 const filenameParts = fileName.split('/');
@@ -203,18 +252,10 @@ export const extractPPTX = async (arrayBuffer: ArrayBuffer): Promise<{ text: str
 
                         // Check if it's an image relationship
                         if (type && type.includes('image') && target) {
-                            // Target is usually relative like "../media/image1.png"
-                            // We need to resolve it to "ppt/media/image1.png"
-                            // content path is "ppt/slides/". "../" takes us to "ppt/"
-
-                            // Simple resolution assuming standard PPTX structure
+                            // Resolve relative path to zip path
                             let imagePath = target.replace('../', 'ppt/');
 
-                            // Sometimes target is just "media/image1.png" (relative to slide?) - wait, no usually relative to keys
                             if (!imagePath.startsWith('ppt/')) {
-                                // If it didn't start with ../, it's relative to ppt/slides/
-                                // but usually images are in ppt/media
-                                // Let's try matching the file in the zip keys
                                 const normalizedTarget = target.replace('../', '').replace(/^\//, '');
                                 const possiblePath = `ppt/${normalizedTarget}`;
                                 if (content.files[possiblePath]) imagePath = possiblePath;
@@ -223,8 +264,8 @@ export const extractPPTX = async (arrayBuffer: ArrayBuffer): Promise<{ text: str
                             if (content.files[imagePath]) {
                                 const imgBuffer = await content.files[imagePath].async('arraybuffer');
 
-                                // SAFEGUARD: Skip images larger than 500KB or if TOTAL load exceeds 10MB
-                                const isTooLarge = imgBuffer.byteLength > 500 * 1024;
+                                // SAFEGUARD: Skip images larger than 2MB or if TOTAL load exceeds 10MB
+                                const isTooLarge = imgBuffer.byteLength > 2 * 1024 * 1024;
                                 const isBudgetExceeded = totalImageSize + imgBuffer.byteLength > 10 * 1024 * 1024;
 
                                 if (isTooLarge || isBudgetExceeded) {
@@ -232,23 +273,23 @@ export const extractPPTX = async (arrayBuffer: ArrayBuffer): Promise<{ text: str
                                 } else {
                                     totalImageSize += imgBuffer.byteLength;
                                     const ext = imagePath.split('.').pop()?.toLowerCase();
-                                    const mime = ext === 'png' ? 'image/png' : (ext === 'jpeg' || ext === 'jpg') ? 'image/jpeg' : 'image/octet-stream';
+                                    // Expanded MIME detection for common PPTX image formats
+                                    const mimeMap: Record<string, string> = {
+                                        'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+                                        'gif': 'image/gif', 'bmp': 'image/bmp', 'tiff': 'image/tiff',
+                                        'tif': 'image/tiff', 'svg': 'image/svg+xml', 'webp': 'image/webp',
+                                        'emf': 'image/emf', 'wmf': 'image/wmf',
+                                    };
+                                    const mime = mimeMap[ext || ''] || 'image/png';
 
                                     const blob = new Blob([imgBuffer], { type: mime });
-                                    // PERFORMANCE: Use ObjectURL instead of Base64 string to prevent DOM crash
-                                    const dataUrl = URL.createObjectURL(blob);
+                                    slideImageBlobs.push(blob);
 
-                                    // VISUAL ANALYSIS: Capture first 5 distinct images (slides) for AI analysis
-                                    // Only include PNG/JPEG - skip other formats that Gemini may reject
-                                    if (visualSlides.length < 5 && imgBuffer.byteLength < 2 * 1024 * 1024 && (mime === 'image/png' || mime === 'image/jpeg')) {
-                                        const base64 = await blobToDataURL(blob);
-                                        // Remove data:image/...;base64, prefix
-                                        visualSlides.push({ data: base64.split(',')[1], mimeType: mime });
-                                    }
-
+                                    // ObjectURL for HTML preview
+                                    const objectUrl = URL.createObjectURL(blob);
                                     imagesHtml += `
                                         <div class="mb-4">
-                                            <img src="${dataUrl}" class="max-w-full max-h-[300px] object-contain rounded border border-slate-100" />
+                                            <img src="${objectUrl}" class="max-w-full max-h-[300px] object-contain rounded border border-slate-100" />
                                         </div>
                                     `;
                                 }
@@ -260,6 +301,9 @@ export const extractPPTX = async (arrayBuffer: ArrayBuffer): Promise<{ text: str
                 console.warn("Failed to extract images for slide " + slideNum, imgErr);
             }
 
+            // Store per-slide data for canvas rendering
+            slideDataList.push({ text: slideText, imageBlobs: slideImageBlobs });
+
             if (slideText.trim() || imagesHtml) {
                 const slideHtml = `
                     <div class="slide bg-white border border-slate-200 p-6 rounded shadow-sm text-black">
@@ -270,7 +314,6 @@ export const extractPPTX = async (arrayBuffer: ArrayBuffer): Promise<{ text: str
                 `;
                 result.text += `[Slide ${slideNum}] ${slideText}\n\n`;
                 result.html += slideHtml;
-                slideHtmlBlocks.push(slideHtml); // Store for fallback canvas rendering
             }
         }
 
@@ -281,17 +324,32 @@ export const extractPPTX = async (arrayBuffer: ArrayBuffer): Promise<{ text: str
         result.html = "<div class='text-red-500'>Error parsing presentation slides.</div>";
     }
 
-    // FALLBACK: If no embedded images were found (text/shape-only slides),
-    // generate canvas thumbnails from each slide's HTML for the annotation carousel
-    if (visualSlides.length === 0 && slideHtmlBlocks.length > 0) {
-        console.log("PPTX: No embedded images found, generating canvas thumbnails...");
-        for (let i = 0; i < Math.min(slideHtmlBlocks.length, 10); i++) {
-            const thumbnail = renderSlideHtmlToCanvas(slideHtmlBlocks[i], i + 1);
+    // ALWAYS generate canvas-rendered visual slide thumbnails for the preview carousel.
+    // This renders both text AND embedded images onto a canvas → reliable base64 output.
+    if (slideDataList.length > 0) {
+        console.log(`PPTX: Generating canvas thumbnails for ${slideDataList.length} slides...`);
+        for (let i = 0; i < Math.min(slideDataList.length, 10); i++) {
+            const { text, imageBlobs } = slideDataList[i];
+
+            // Try canvas rendering with images first
+            const thumbnail = await renderSlideToCanvas(text, i + 1, imageBlobs);
             if (thumbnail) {
                 visualSlides.push(thumbnail);
             }
+
+            // If canvas with images failed, try converting individual images as fallback
+            if (!thumbnail && imageBlobs.length > 0) {
+                for (const blob of imageBlobs) {
+                    if (visualSlides.length >= 10) break;
+                    const converted = await imageBlobToBase64PNG(blob);
+                    if (converted) {
+                        visualSlides.push(converted);
+                        break; // One image per slide is enough for preview
+                    }
+                }
+            }
         }
-        console.log(`PPTX: Canvas thumbnails generated: ${visualSlides.length}`);
+        console.log(`PPTX: Visual slides generated: ${visualSlides.length}`);
     }
 
     return { text: result.text, html: result.html, visualSlides };

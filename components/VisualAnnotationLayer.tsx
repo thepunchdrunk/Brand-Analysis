@@ -386,7 +386,7 @@ export const VisualAnnotationLayer: React.FC<VisualAnnotationLayerProps> = ({
                             )}
                             <div className="relative w-full max-w-4xl bg-white shadow-2xl p-8 rounded-lg">
                                 <div className="prose prose-slate max-w-none prose-sm">
-                                    <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(htmlContent) }} />
+                                    <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(htmlContent, { ADD_URI_SAFE_ATTR: ['src'], ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|blob|data):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i }) }} />
 
                                 </div>
                                 {/* HTML ANNOTATIONS (Floating) - Only if boxes exist */}
