@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
     CheckCircle2, AlertTriangle, XCircle,
-    Check, Shield, Zap, Maximize2, ArrowLeft, Globe
+    Check, Shield, Zap, Maximize2, ArrowLeft, Globe, Clock
 } from 'lucide-react';
 import { AnalysisResult, BrandSettings, AssetType, CommunicationContext } from '../types';
 
@@ -317,6 +317,12 @@ export const ScoreDashboard: React.FC<ScoreDashboardProps> = ({ result, onReset,
                                                 <span className="px-1.5 py-0.5 rounded-sm bg-amber-500/20 text-amber-300 border border-amber-500/20 text-[9px] font-bold uppercase tracking-wider">ADVISORY</span>
                                             )}
                                             <span className="text-[10px] font-bold text-slate-400 uppercase truncate">{issue.category}</span>
+                                            {issue.timestamp !== undefined && (
+                                                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 text-[10px] font-bold tabular-nums">
+                                                    <Clock className="h-2.5 w-2.5" />
+                                                    {Math.floor(issue.timestamp / 60)}:{String(Math.floor(issue.timestamp % 60)).padStart(2, '0')}
+                                                </span>
+                                            )}
                                         </div>
                                         <h4 className="font-bold text-slate-900 text-sm leading-tight truncate">{issue.description}</h4>
                                     </div>

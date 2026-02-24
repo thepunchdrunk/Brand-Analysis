@@ -236,7 +236,10 @@ export const analyzeContent = async (
     - **Page/Slide Numbers**: For multi-page documents (PDF, PPTX):
       - You MUST provide 'page_number' (1-indexed) for EVERY issue.
       - Match issues to the specific slide/page image provided.
-    - **Timestamps**: For Video/Audio content, provide 'timestamp' (in seconds).
+    - **Timestamps**: For Video/Audio content, you MUST provide 'timestamp' (in seconds) for EVERY issue.
+      - Timestamps are MANDATORY for all video/audio issues. Issues without timestamps will be INVALID.
+      - Provide the exact second where the issue is most visible or audible.
+      - Also provide 'box_2d' coordinates for the visual location at that specific timestamp.
     - **Categories**: Use ONLY: 'Brand', 'Compliance', 'Cultural'. (Map visual/layout issues to 'Brand').
     - **Corrected Text**: Rewrite content to match Brand Voice.
 
@@ -275,6 +278,37 @@ Now analyze these slides:`
       // Add text content as supplementary context only
       if (content) {
         parts.push({ text: `\n\nSUPPLEMENTARY TEXT CONTENT (for context):\n${content}` });
+      }
+    } else if (fileBase64 && mimeType && (mimeType.startsWith('video/') || mimeType.startsWith('audio/'))) {
+      // === VIDEO/AUDIO ANALYSIS MODE ===
+      parts.push({
+        text: `VIDEO/AUDIO ANALYSIS MODE: You are analyzing a ${assetType} file.
+
+CRITICAL REQUIREMENTS FOR VIDEO/AUDIO ANALYSIS:
+1. Watch/listen through the ENTIRE content carefully.
+2. For EVERY issue you find, you MUST provide:
+   - 'timestamp': The EXACT second (as a number) where the issue occurs. This is MANDATORY.
+   - 'box_2d': [ymin, xmin, ymax, xmax] coordinates (0-1000 scale) pointing to the visual location of the issue at that timestamp.
+3. Issues WITHOUT a 'timestamp' field will be REJECTED and are invalid.
+4. Analyze at multiple points throughout the video - check the beginning, middle, and end.
+5. Look for: brand voice consistency in narration/dialogue, visual brand alignment, on-screen text compliance, banned terms in speech/captions, cultural sensitivity in visuals.
+6. Space your timestamps across the full duration of the content.
+7. For audio-only content, set box_2d to [400, 400, 600, 600] (center) and focus on spoken content analysis.
+
+IMPORTANT: Every single issue in your response MUST have a numeric 'timestamp' value.
+
+Now analyze this ${assetType}:`
+      });
+
+      parts.push({
+        inlineData: {
+          mimeType: mimeType,
+          data: fileBase64
+        }
+      });
+
+      if (content) {
+        parts.push({ text: `\n\nSUPPLEMENTARY TEXT/TRANSCRIPT (if available):\n${content}` });
       }
     } else {
       // Standard text/file analysis
