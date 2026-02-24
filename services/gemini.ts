@@ -264,14 +264,15 @@ Return valid JSON matching the schema.`;
     }
 
     // === PROGRESS ANIMATION ===
+    // Progress starts at 10% and simulates processing, but will instantly jump to 100% on finish
     const startTime = Date.now();
     let currentProgress = 10;
     if (onProgress) onProgress(currentProgress);
 
     const progressInterval = setInterval(() => {
       const elapsed = Date.now() - startTime;
-      // Asymptotic curve: 10→88% over ~20s (fast model)
-      const targetProgress = Math.min(88, 10 + 78 * (1 - Math.exp(-elapsed / 8000)));
+      // Asymptotic curve: 10→90% over ~15s (very fast curve)
+      const targetProgress = Math.min(90, 10 + 80 * (1 - Math.exp(-elapsed / 5000)));
       if (onProgress && targetProgress > currentProgress) {
         currentProgress = Math.floor(targetProgress);
         onProgress(currentProgress);

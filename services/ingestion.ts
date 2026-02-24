@@ -24,9 +24,8 @@ export const extractPDFPages = async (arrayBuffer: ArrayBuffer): Promise<{ data:
     try {
         const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
 
-        // Limit to first 5 pages for performance and API limits
-        // Limit to first 20 pages (DoS Protection)
-        const MAX_PAGES = 20;
+        // Limit to first 10 pages for performance and API limits
+        const MAX_PAGES = 10;
         const maxPages = Math.min(pdf.numPages, MAX_PAGES);
         console.log(`PDF Extraction: Processing ${maxPages} of ${pdf.numPages} pages (Limit: ${MAX_PAGES})`);
 
@@ -40,8 +39,8 @@ export const extractPDFPages = async (arrayBuffer: ArrayBuffer): Promise<{ data:
                 continue;
             }
 
-            // Render at 1.5x scale for good quality without being too large
-            const viewport = page.getViewport({ scale: 1.5 });
+            // Render at 1.0x scale (standard resolution) to keep base64 payload small for fast API transit
+            const viewport = page.getViewport({ scale: 1.0 });
             canvas.width = viewport.width;
             canvas.height = viewport.height;
 
