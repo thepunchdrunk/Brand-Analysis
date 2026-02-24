@@ -73,17 +73,86 @@ const blobToDataURL = (blob: Blob): Promise<string> => {
     });
 };
 
+// Render a slide's HTML string to a canvas and return base64 image
+// Used to generate visual thumbnails when PPTX has no embedded images
+const renderSlideHtmlToCanvas = async (slideHtml: string, slideNumber: number): Promise<{ data: string; mimeType: string } | null> => {
+    return new Promise((resolve) => {
+        try {
+            // Create off-screen iframe to render HTML
+            const iframe = document.createElement('iframe');
+            iframe.style.cssText = 'position:fixed;bottom:-9999px;left:-9999px;width:960px;height:540px;border:none;visibility:hidden;';
+            iframe.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+                body { margin: 0; padding: 24px; background: white; font-family: Arial, sans-serif; font-size: 14px; color: #111; box-sizing: border-box; }
+                h4 { color: #666; font-size: 10px; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 12px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+                img { max-width: 100%; max-height: 200px; object-fit: contain; }
+                p { line-height: 1.6; }
+                .slide { width: 100%; }
+            </style></head><body><div class="slide">${slideHtml}</div></body></html>`;
+            document.body.appendChild(iframe);
+
+            iframe.onload = () => {
+                setTimeout(async () => {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = 960;
+                        canvas.height = 540;
+                        const ctx = canvas.getContext('2d');
+                        if (!ctx) { document.body.removeChild(iframe); resolve(null); return; }
+
+                        // Fill white background
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, 960, 540);
+
+                        // Draw slide number label
+                        ctx.fillStyle = '#888888';
+                        ctx.font = 'bold 12px Arial';
+                        ctx.fillText(`Slide ${slideNumber}`, 16, 20);
+
+                        // Attempt to use built-in image capture if available (Chrome)
+                        const iframeDoc = iframe.contentDocument;
+                        if (iframeDoc) {
+                            // Draw text content as summary on canvas as fallback
+                            const bodyText = iframeDoc.body?.innerText || '';
+                            const lines = bodyText.split('\n').filter((l: string) => l.trim()).slice(0, 20);
+                            ctx.fillStyle = '#111111';
+                            ctx.font = '13px Arial';
+                            let y = 48;
+                            for (const line of lines) {
+                                if (y > 500) break;
+                                const truncated = line.length > 90 ? line.substring(0, 87) + '…' : line;
+                                ctx.fillText(truncated, 24, y);
+                                y += 22;
+                            }
+                        }
+
+                        document.body.removeChild(iframe);
+                        const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+                        resolve({ data: base64, mimeType: 'image/jpeg' });
+                    } catch (e) {
+                        document.body.removeChild(iframe);
+                        resolve(null);
+                    }
+                }, 100); // Allow iframe to fully render
+            };
+        } catch (e) {
+            resolve(null);
+        }
+    });
+};
+
 export const extractPPTX = async (arrayBuffer: ArrayBuffer): Promise<{ text: string, html: string, visualSlides: { data: string; mimeType: string }[] }> => {
     const zip = new JSZip();
     const result = { text: '', html: '<div class="pptx-preview space-y-8">' };
     let totalImageSize = 0;
-    const visualSlides: { data: string; mimeType: string }[] = []; // Store base64 with mimeType
+    const visualSlides: { data: string; mimeType: string }[] = [];
+    const slideHtmlBlocks: string[] = []; // Store per-slide HTML for fallback canvas rendering
+    let slideFiles: string[] = []; // Hoisted for fallback access
 
     try {
         const content = await zip.loadAsync(arrayBuffer);
 
         // Find slide files
-        const slideFiles = Object.keys(content.files).filter(fileName =>
+        slideFiles = Object.keys(content.files).filter(fileName =>
             fileName.match(/ppt\/slides\/slide\d+\.xml/)
         );
 
@@ -187,14 +256,16 @@ export const extractPPTX = async (arrayBuffer: ArrayBuffer): Promise<{ text: str
             }
 
             if (slideText.trim() || imagesHtml) {
-                result.text += `[Slide ${slideNum}] ${slideText}\n\n`;
-                result.html += `
+                const slideHtml = `
                     <div class="slide bg-white border border-slate-200 p-6 rounded shadow-sm text-black">
                         <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 border-b pb-2">Slide ${slideNum}</h4>
                         ${imagesHtml}
                         <p class="whitespace-pre-wrap mt-4 text-sm font-medium opacity-80">${slideText}</p>
                     </div>
                 `;
+                result.text += `[Slide ${slideNum}] ${slideText}\n\n`;
+                result.html += slideHtml;
+                slideHtmlBlocks.push(slideHtml); // Store for fallback canvas rendering
             }
         }
 
@@ -203,6 +274,24 @@ export const extractPPTX = async (arrayBuffer: ArrayBuffer): Promise<{ text: str
         console.error("PPTX Extraction Failed:", e);
         result.text = "Error extracting PPTX content.";
         result.html = "<div class='text-red-500'>Error parsing presentation slides.</div>";
+    }
+
+    // FALLBACK: If no embedded images were found (text/shape-only slides),
+    // generate canvas thumbnails from each slide's HTML for the annotation carousel
+    if (visualSlides.length === 0 && slideHtmlBlocks.length > 0) {
+        console.log("PPTX: No embedded images found, generating canvas thumbnails from slide HTML...");
+        for (let i = 0; i < Math.min(slideHtmlBlocks.length, 10); i++) {
+            try {
+                const thumbnail = await renderSlideHtmlToCanvas(slideHtmlBlocks[i], i + 1);
+                if (thumbnail) {
+                    visualSlides.push(thumbnail);
+                    console.log(`PPTX: Generated canvas thumbnail for slide ${i + 1}`);
+                }
+            } catch (e) {
+                console.warn(`PPTX: Failed to render canvas thumbnail for slide ${i + 1}`, e);
+            }
+        }
+        console.log(`PPTX: Canvas thumbnail generation complete. Total: ${visualSlides.length}`);
     }
 
     return { text: result.text, html: result.html, visualSlides };

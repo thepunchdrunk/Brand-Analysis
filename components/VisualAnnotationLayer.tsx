@@ -69,14 +69,14 @@ export const VisualAnnotationLayer: React.FC<VisualAnnotationLayerProps> = ({
 
     // Determine Render Mode
     const isVideo = assetType === AssetType.VIDEO || mimeType?.startsWith('video/');
-    // If we have extracted visual slides (images), use the image carousel instead of react-pdf
-    // This provides a more stable experience as ingestion already handled the rendering
+    // PDF: use native react-pdf renderer (only when no visualSlides were extracted)
     const isPDF = mimeType === 'application/pdf' && (!visualSlides || visualSlides.length === 0);
+    // PPTX/PDF with extracted slide images: use image carousel
     const hasVisualSlides = visualSlides && visualSlides.length > 0;
-    // Use carousel for PDF and PPTX with visual slides
+    // Carousel only for: actual PDF native render, OR when we have real extracted slide images
     const useCarousel = isPDF || hasVisualSlides;
-    // Ensure we treat it as a document (enabling carousel) if we have slides, even if isPDF is false
-    const isDoc = htmlContent || assetType === AssetType.DOCUMENT || assetType === AssetType.PRESENTATION || isPDF || hasVisualSlides;
+    // isDoc: true for any document-like asset (enables doc rendering mode)
+    const isDoc = !!(htmlContent || assetType === AssetType.DOCUMENT || assetType === AssetType.PRESENTATION || isPDF || hasVisualSlides);
 
     // DIAGNOSTIC LOGGING
     useEffect(() => {
