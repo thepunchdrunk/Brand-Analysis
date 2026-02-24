@@ -331,7 +331,7 @@ Now analyze this ${assetType}:`
 
 
     // === SMOOTH TIME-BASED PROGRESS ===
-    // Progress fills 10% → 90% over ~90 seconds to match 120s timeout
+    // Progress fills 10% → 90% over ~30 seconds
     // This prevents the "stuck" or "jumpy" feeling from burst-based streaming
     const startTime = Date.now();
     let currentProgress = 10;
@@ -340,8 +340,8 @@ Now analyze this ${assetType}:`
     const progressInterval = setInterval(() => {
       const elapsed = Date.now() - startTime;
       // Asymptotic curve: rises quickly at first, slows towards 90%
-      // Formula: 10 + 78 * (1 - e^(-elapsed/30000)) → approaches 88% over ~90s
-      const targetProgress = Math.min(88, 10 + 78 * (1 - Math.exp(-elapsed / 30000)));
+      // Formula: 10 + 78 * (1 - e^(-elapsed/12000)) → approaches 88% over ~30s
+      const targetProgress = Math.min(88, 10 + 78 * (1 - Math.exp(-elapsed / 12000)));
       if (onProgress && targetProgress > currentProgress) {
         currentProgress = Math.floor(targetProgress);
         onProgress(currentProgress);
@@ -356,12 +356,13 @@ Now analyze this ${assetType}:`
         responseMimeType: "application/json",
         responseSchema: analysisSchema,
         temperature: 0.2,
+        thinkingConfig: { thinkingBudget: 0 },
       },
     }));
 
     let result;
     try {
-      result = await withTimeout(streamPromise, 120000); // 120s timeout — Gemini thinking can take 60s+
+      result = await withTimeout(streamPromise, 60000); // 60s timeout — fast with thinking disabled
     } catch (e) {
       clearInterval(progressInterval);
       throw e;
