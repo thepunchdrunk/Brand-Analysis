@@ -40,8 +40,8 @@ const generateWithRetry = async <T>(fn: () => Promise<T>, retries = 3, delay = 1
     }
 
     // Retry on Overloaded (503) or Rate Limit (429)
-    if (retries > 0 && (error?.status === 503 || error?.status === 429 || error?.code === 503 || error?.message?.includes('overloaded'))) {
-      console.warn(`API Transient Error (${error?.status}). Retrying in ${delay / 1000}s...`);
+    if (retries > 0 && (error?.status === 503 || error?.status === 429 || error?.code === 503 || error?.message?.includes('overloaded') || error?.message?.includes('timed out'))) {
+      console.warn(`API Transient Error (${error?.status || error?.message}). Retrying in ${delay / 1000}s...`);
       await new Promise(r => setTimeout(r, delay));
       return generateWithRetry(fn, retries - 1, delay * 2);
     }
@@ -50,7 +50,7 @@ const generateWithRetry = async <T>(fn: () => Promise<T>, retries = 3, delay = 1
 };
 
 // Timeout Wrapper
-const withTimeout = <T>(promise: Promise<T>, ms: number = 45000): Promise<T> => {
+const withTimeout = <T>(promise: Promise<T>, ms: number = 120000): Promise<T> => {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Request timed out after ${ms / 1000}s`)), ms))
@@ -331,7 +331,7 @@ Now analyze this ${assetType}:`
 
 
     // === SMOOTH TIME-BASED PROGRESS ===
-    // Progress fills 10% → 90% over ~30 seconds regardless of chunk timing
+    // Progress fills 10% → 90% over ~90 seconds to match 120s timeout
     // This prevents the "stuck" or "jumpy" feeling from burst-based streaming
     const startTime = Date.now();
     let currentProgress = 10;
@@ -340,8 +340,8 @@ Now analyze this ${assetType}:`
     const progressInterval = setInterval(() => {
       const elapsed = Date.now() - startTime;
       // Asymptotic curve: rises quickly at first, slows towards 90%
-      // Formula: 10 + 80 * (1 - e^(-elapsed/15000)) → approaches 90% over ~30s
-      const targetProgress = Math.min(88, 10 + 78 * (1 - Math.exp(-elapsed / 12000)));
+      // Formula: 10 + 78 * (1 - e^(-elapsed/30000)) → approaches 88% over ~90s
+      const targetProgress = Math.min(88, 10 + 78 * (1 - Math.exp(-elapsed / 30000)));
       if (onProgress && targetProgress > currentProgress) {
         currentProgress = Math.floor(targetProgress);
         onProgress(currentProgress);
@@ -361,7 +361,7 @@ Now analyze this ${assetType}:`
 
     let result;
     try {
-      result = await withTimeout(streamPromise, 45000); // 45s Hard Timeout
+      result = await withTimeout(streamPromise, 120000); // 120s timeout — Gemini thinking can take 60s+
     } catch (e) {
       clearInterval(progressInterval);
       throw e;
