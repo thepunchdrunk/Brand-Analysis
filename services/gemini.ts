@@ -283,13 +283,14 @@ Return valid JSON matching the schema.`;
     try {
       response = await withTimeout(
         generateWithRetry(() => ai.models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash',
           contents: { parts },
           config: {
             systemInstruction: systemInstruction,
             responseMimeType: "application/json",
             responseSchema: analysisSchema,
             temperature: 0.2,
+            thinkingConfig: { thinkingBudget: 0 },
           },
         })),
         60000
@@ -419,7 +420,7 @@ export const detectVisualContext = async (fileBase64: string, mimeType: string):
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       contents: { parts },
       config: { responseMimeType: "application/json", responseSchema: typeSchema }
     });
@@ -438,7 +439,7 @@ export const detectVisualContext = async (fileBase64: string, mimeType: string):
 export const extractBrandSettings = async (content: string): Promise<BrandSettings> => {
   const ai = getClient();
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     contents: `Extract brand settings from: ${content.substring(0, 5000)}`,
     config: { responseMimeType: "application/json", responseSchema: settingsExtractionSchema }
   });
