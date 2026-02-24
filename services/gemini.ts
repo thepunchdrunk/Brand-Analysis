@@ -274,15 +274,23 @@ Now analyze these slides:`
     }
 
     // === PROGRESS ANIMATION ===
-    // Progress starts at 10% and simulates processing, but will instantly jump to 100% on finish
+    // Two-phase curve: fast to 80% (~10s), then slow crawl to 98% (never stalls visibly)
     const startTime = Date.now();
     let currentProgress = 10;
     if (onProgress) onProgress(currentProgress);
 
     const progressInterval = setInterval(() => {
       const elapsed = Date.now() - startTime;
-      // Asymptotic curve: 10→90% over ~15s (very fast curve)
-      const targetProgress = Math.min(90, 10 + 80 * (1 - Math.exp(-elapsed / 5000)));
+      let targetProgress: number;
+      if (elapsed < 12000) {
+        // Phase 1: Quick climb 10→80% over ~12s
+        targetProgress = 10 + 70 * (1 - Math.exp(-elapsed / 4000));
+      } else {
+        // Phase 2: Slow crawl 80→98% (keeps moving, never stalls)
+        const phase2Elapsed = elapsed - 12000;
+        targetProgress = 80 + 18 * (1 - Math.exp(-phase2Elapsed / 30000));
+      }
+      targetProgress = Math.min(98, targetProgress);
       if (onProgress && targetProgress > currentProgress) {
         currentProgress = Math.floor(targetProgress);
         onProgress(currentProgress);
