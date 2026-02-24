@@ -223,7 +223,7 @@ export const ScoreDashboard: React.FC<ScoreDashboardProps> = ({ result, onReset,
                                 <VisualAnnotationLayer
                                     assetType={assetType as AssetType}
                                     src={fileUrl || ""}
-                                    issues={sortedIssues}
+                                    issues={result.issues}
                                     selectedIssueId={hoveredIssue || undefined}
                                     onIssueSelect={(id) => {
                                         setHoveredIssue(id);

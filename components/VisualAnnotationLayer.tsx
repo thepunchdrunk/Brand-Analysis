@@ -136,12 +136,13 @@ export const VisualAnnotationLayer: React.FC<VisualAnnotationLayerProps> = ({
         }
     };
 
-    const handleSeekToIssue = async (issue: Issue) => {
-        if (isVideo && issue.timestamp && videoRef.current) {
+    const handleSeekToIssue = (issue: Issue) => {
+        if (isVideo && issue.timestamp !== undefined && videoRef.current) {
             const vid = videoRef.current;
-            vid.currentTime = issue.timestamp;
             vid.pause();
-            await new Promise(r => setTimeout(r, 200));
+            vid.currentTime = issue.timestamp;
+            setCurrentTime(issue.timestamp);
+            setIsPlaying(false);
         }
         onIssueSelect(issue.id);
     };
@@ -460,7 +461,8 @@ export const VisualAnnotationLayer: React.FC<VisualAnnotationLayerProps> = ({
                                     {issues.filter(i => (i.boundingBox || (isVideo && i.timestamp !== undefined))).map((issue) => {
                                         const isSelected = selectedIssueId === issue.id;
                                         // Show if selected OR within 3 seconds of current time
-                                        const isMatch = isSelected || (issue.timestamp !== undefined && Math.abs(currentTime - issue.timestamp) < 3.0);
+                                        const isNearTime = issue.timestamp !== undefined && Math.abs(currentTime - issue.timestamp) < 3.0;
+                                        const isMatch = isSelected || isNearTime;
 
                                         if (!isMatch) return null;
 
@@ -505,7 +507,7 @@ export const VisualAnnotationLayer: React.FC<VisualAnnotationLayerProps> = ({
                                                             <div className="flex items-center gap-2 mt-2">
                                                                 {issue.timestamp !== undefined && (
                                                                     <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium border border-slate-200">
-                                                                        {Math.floor(issue.timestamp / 60)}:{(issue.timestamp % 60).toString().padStart(2, '0')}
+                                                                        {Math.floor(issue.timestamp / 60)}:{Math.floor(issue.timestamp % 60).toString().padStart(2, '0')}
                                                                     </span>
                                                                 )}
                                                             </div>
