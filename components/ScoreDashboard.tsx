@@ -197,10 +197,10 @@ export const ScoreDashboard: React.FC<ScoreDashboardProps> = ({ result, onReset,
             </header>
 
             {/* MAIN SPLIT VIEW */}
-            <main className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-3 gap-8 h-[calc(100vh-280px)] relative z-10">
+            <main className="w-full max-w-7xl flex flex-col lg:grid lg:grid-cols-3 gap-8 min-h-[500px] h-[calc(100vh-280px)] xl:h-[calc(100vh-220px)] relative z-10">
 
-                {/* LEFT: CONTENT VIEWER (2/3 width) */}
-                <section className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 overflow-hidden flex flex-col relative group shadow-xl shadow-slate-200/40">
+                {/* LEFT: CONTENT VIEWER (2/3 width on desktop, full on mobile) */}
+                <section className="lg:col-span-2 h-[50vh] lg:h-full bg-white rounded-3xl border border-slate-200 overflow-hidden flex flex-col relative group shadow-xl shadow-slate-200/40">
 
                     <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                         <span className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
@@ -246,8 +246,8 @@ export const ScoreDashboard: React.FC<ScoreDashboardProps> = ({ result, onReset,
                     </div>
                 </section >
 
-                {/* RIGHT: UNIFIED ISSUE STREAM (1/3 width) */}
-                < section className="flex flex-col h-full overflow-hidden bg-white rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/40" >
+                {/* RIGHT: UNIFIED ISSUE STREAM (1/3 width on desktop, full on mobile) */}
+                <section className="flex flex-col h-[50vh] lg:h-full overflow-hidden bg-white rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/40">
 
                     {/* FILTER TABS */}
                     < div className="flex p-1 gap-1 border-b border-slate-100 bg-slate-50/50 overflow-x-auto scrollbar-hide" >
