@@ -11,7 +11,7 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { ToastProvider, useToast } from './components/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
 // Contexts
-import { AppView, CommunicationContext, UploadState, AnalysisResult, BrandSettings, AssetType, UserRole, HistoryItem, AudienceScope, Region, FixIntensity } from './types';
+import { AppView, CommunicationContext, UploadState, AnalysisResult, BrandSettings, AssetType, UserRole, HistoryItem, AudienceScope } from './types';
 import { analyzeContent } from './services/gemini';
 
 console.log("🚀 BOOT-TRACE: App.tsx module evaluating"); // TRACE LOG

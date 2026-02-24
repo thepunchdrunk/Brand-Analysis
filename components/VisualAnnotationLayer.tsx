@@ -12,7 +12,7 @@ import DOMPurify from 'dompurify';
 
 // Mock react-pdf for debug
 const Document = ({ children }: any) => <div>{children}</div>;
-const Page = (props: any) => <div>PDF Page Mock</div>;
+const Page = (_props: any) => <div>PDF Page Mock</div>;
 const pdfjs: any = { GlobalWorkerOptions: {} };
 
 // Configure PDF Worker
