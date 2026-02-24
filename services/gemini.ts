@@ -320,21 +320,68 @@ Now analyze these slides:`
 
     const rawJson = JSON.parse(cleanJson(fullText));
 
-    // Transform 0-1000 scale bounding boxes to % for UI
-    const issues = (rawJson.issues || []).map((issue: any) => {
+    // === DEFENSIVE POST-PROCESSING ===
+    // Normalize every issue to guarantee the UI never drops or misrenders anything.
+    // Gemini is non-deterministic — fields may be missing, malformed, or unexpected.
+    const isVisualAsset = !!(visualSlides?.length || (fileBase64 && mimeType?.startsWith('image/')));
+    const isVideoAsset = !!(fileBase64 && mimeType && (mimeType.startsWith('video/') || mimeType.startsWith('audio/')));
+    const isMultiPage = !!(visualSlides && visualSlides.length > 1);
+
+    const issues = (rawJson.issues || []).map((issue: any, idx: number) => {
+      // 1. Ensure unique ID
+      const id = issue.id || `issue-${Date.now()}-${idx}`;
+
+      // 2. Normalize category (must be one of Brand/Compliance/Cultural)
+      const validCategories = ['Brand', 'Compliance', 'Cultural'];
+      const category = validCategories.includes(issue.category) ? issue.category : 'Brand';
+
+      // 3. Normalize severity
+      const validSeverities = ['Low', 'Medium', 'High'];
+      const severity = validSeverities.includes(issue.severity) ? issue.severity : 'Medium';
+
+      // 4. Ensure description and fix exist
+      const description = issue.description || `Issue #${idx + 1}`;
+      const rationale = issue.rationale || '';
+      const fix = issue.fix || 'Review and address this item.';
+      const subcategory = issue.subcategory || category;
+
+      // 5. Normalize blocking flag
+      const blocking = issue.blocking === true || severity === 'High';
+
+      // 6. Normalize fixType
+      const fixType = issue.fixType === 'Deterministic' ? 'Deterministic' : 'Manual';
+
+      // 7. Transform bounding box (0-1000 → %) or assign default center
+      let boundingBox = undefined;
       if (issue.box_2d && Array.isArray(issue.box_2d) && issue.box_2d.length === 4) {
         const [ymin, xmin, ymax, xmax] = issue.box_2d;
-        return {
-          ...issue,
-          boundingBox: {
-            y: (ymin / 1000) * 100,
-            x: (xmin / 1000) * 100,
-            height: ((ymax - ymin) / 1000) * 100,
-            width: ((xmax - xmin) / 1000) * 100
-          }
+        boundingBox = {
+          y: (ymin / 1000) * 100,
+          x: (xmin / 1000) * 100,
+          height: ((ymax - ymin) / 1000) * 100,
+          width: ((xmax - xmin) / 1000) * 100
         };
+      } else if (isVisualAsset || isMultiPage) {
+        // Default center position so the marker still renders on screen
+        boundingBox = { x: 45, y: 45, width: 10, height: 10 };
       }
-      return issue;
+
+      // 8. Normalize page_number for multi-page docs
+      let page_number = issue.page_number;
+      if (isMultiPage && !page_number) {
+        page_number = 1; // Default to first page
+      }
+
+      // 9. Normalize timestamp for video/audio
+      let timestamp = issue.timestamp;
+      if (isVideoAsset && (timestamp === undefined || timestamp === null)) {
+        timestamp = 0; // Default to start
+      }
+
+      return {
+        id, category, subcategory, description, rationale, fix,
+        severity, blocking, fixType, boundingBox, page_number, timestamp
+      };
     });
 
     const json: AnalysisResult = { ...rawJson, issues };
