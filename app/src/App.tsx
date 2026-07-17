@@ -10,6 +10,7 @@ import { UserManagement } from './components/UserManagement';
 import { AdminDashboard } from './components/AdminDashboard';
 import { ToastProvider, useToast } from './components/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { SettingsModal } from './components/SettingsModal';
 // Contexts
 import { AppView, CommunicationContext, UploadState, AnalysisResult, BrandSettings, AssetType, UserRole, HistoryItem, AudienceScope } from './types';
 import { analyzeContent } from './services/gemini';
@@ -86,6 +87,7 @@ function AppContent() {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [progress, setProgress] = useState(0);
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const buildTimestamp = "2026-01-12 21:15"; // Hardcoded timestamp for verification
 
     useEffect(() => {
@@ -214,7 +216,11 @@ function AppContent() {
         } catch (error) {
             console.error("Analysis failed", error);
             const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            addToast(`Analysis Failed: ${errorMessage}`, "error");
+            if (errorMessage === "MISSING_API_KEY") {
+                setIsSettingsOpen(true);
+            } else {
+                addToast(`Analysis Failed: ${errorMessage}`, "error");
+            }
         } finally {
             setIsAnalyzing(false);
         }
@@ -243,6 +249,7 @@ function AppContent() {
             setView={setCurrentView}
             userRole={userRole}
             setUserRole={setUserRole}
+            onOpenSettings={() => setIsSettingsOpen(true)}
         >
             {/* GENERAL USER VIEWS */}
             {userRole === UserRole.GENERAL_USER && currentView === AppView.UPLOAD && (
@@ -291,6 +298,12 @@ function AppContent() {
             {userRole === UserRole.ADMIN && currentView === AppView.USER_MANAGEMENT && (
                 <UserManagement />
             )}
+
+            <SettingsModal 
+              isOpen={isSettingsOpen} 
+              onClose={() => setIsSettingsOpen(false)} 
+              onSave={() => addToast("API Key saved successfully.", "success")} 
+            />
         </Layout>
     );
 }

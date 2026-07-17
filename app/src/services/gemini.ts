@@ -4,15 +4,9 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { CommunicationContext, Region, AnalysisResult, BrandSettings, AssetType, FixIntensity } from '../types';
 
 const getClient = () => {
-  // Debug log (safe: only keys, no values)
-  if (true) {
-    const keys = Object.keys(import.meta.env).filter(k => k.startsWith('VITE_'));
-    console.log(`[Env Debug] Mode: ${import.meta.env.MODE}, Keys found: ${keys.join(', ') || 'none'}`);
-  }
-
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  const apiKey = localStorage.getItem('gemini_api_key');
   if (!apiKey) {
-    throw new Error(`API Key not found in ${import.meta.env.MODE} mode. Please ensure VITE_GEMINI_API_KEY is set in GitHub Secrets for production or .env.local for development.`);
+    throw new Error("MISSING_API_KEY");
   }
   return new GoogleGenAI({ apiKey });
 };

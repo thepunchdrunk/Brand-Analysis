@@ -26,8 +26,6 @@ jobs:
       - name: Build
         working-directory: ./app
         run: npm run build
-        env:
-          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v4
         with:
