@@ -4,8 +4,11 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { CommunicationContext, Region, AnalysisResult, BrandSettings, AssetType, FixIntensity } from '../types';
 
 const getClient = () => {
-  const envKey = import.meta.env.VITE_GEMINI_API_KEY;
-  const apiKey = envKey || localStorage.getItem('gemini_api_key');
+  const windowEnv = (window as any).__RUNTIME_ENV__?.GEMINIAPIKEY;
+  const runtimeKey = windowEnv && windowEnv !== "__GEMINIAPIKEY_PLACEHOLDER__" ? windowEnv : null;
+  const buildTimeKey = import.meta.env.VITE_GEMINI_API_KEY;
+  
+  const apiKey = runtimeKey || buildTimeKey || localStorage.getItem('gemini_api_key');
   if (!apiKey) {
     throw new Error("MISSING_API_KEY");
   }
