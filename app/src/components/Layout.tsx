@@ -9,9 +9,10 @@ interface LayoutProps {
   setView: (view: AppView) => void;
   userRole: UserRole;
   setUserRole: (role: UserRole) => void;
+  onOpenSettings?: () => void;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, userRole, setUserRole }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, userRole, setUserRole, onOpenSettings }) => {
   const NavButton = ({ view, icon: Icon, label }: { view: AppView, icon: any, label: string }) => (
     <button
       onClick={() => setView(view)}
@@ -153,6 +154,15 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, 
               <Globe className="h-3 w-3 text-slate-400" />
               Region: <span className="text-slate-900">Global</span>
             </div>
+            {onOpenSettings && (
+              <button 
+                onClick={onOpenSettings} 
+                className="px-4 py-2 bg-white/80 backdrop-blur-sm text-slate-600 text-xs font-semibold rounded-full border border-slate-200 shadow-sm flex items-center gap-2 hover:bg-slate-50 transition-colors"
+              >
+                <Settings className="h-3 w-3 text-slate-400" />
+                API Key
+              </button>
+            )}
             <div className="px-4 py-2 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full border border-emerald-100 flex items-center gap-2 shadow-sm">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
               System Active
