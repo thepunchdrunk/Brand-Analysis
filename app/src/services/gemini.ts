@@ -4,7 +4,8 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { CommunicationContext, Region, AnalysisResult, BrandSettings, AssetType, FixIntensity } from '../types';
 
 const getClient = () => {
-  const apiKey = localStorage.getItem('gemini_api_key');
+  const envKey = import.meta.env.VITE_GEMINI_API_KEY;
+  const apiKey = envKey || localStorage.getItem('gemini_api_key');
   if (!apiKey) {
     throw new Error("MISSING_API_KEY");
   }
