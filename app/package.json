@@ -11,9 +11,9 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist -r https://github.com/thepunchdrunk/Brand-Governance-V1.git"
+    "deploy": "gh-pages -d dist -r https://github.com/thepunchdrunk/Brand-Analysis.git"
   },
-  "homepage": "https://thepunchdrunk.github.io/Brand-Governance-V1",
+  "homepage": "https://thepunchdrunk.github.io/Brand-Analysis",
   "dependencies": {
     "@google/genai": "^1.31.0",
     "@types/dompurify": "^3.0.5",
