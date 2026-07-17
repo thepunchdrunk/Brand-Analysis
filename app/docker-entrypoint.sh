@@ -7,5 +7,5 @@ if [ -n "$GEMINIAPIKEY" ]; then
     sed -i "s|__GEMINIAPIKEY_PLACEHOLDER__|${GEMINIAPIKEY}|g" /usr/share/nginx/html/index.html
 fi
 
-# Execute the main process (e.g. nginx -g "daemon off;")
-exec "$@"
+# Execute Nginx
+exec nginx -g "daemon off;"
